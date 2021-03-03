@@ -1721,6 +1721,7 @@ namespace MySql.Data.MySqlClient
 
         private void StartFile(string name)
         {
+            Console.Write(name);
             if (directory != null)
             {
                 textWriter = new StreamWriter(Path.Combine(directory, name + ".sql"), false, textEncoding);
@@ -1729,6 +1730,7 @@ namespace MySql.Data.MySqlClient
 
         private void EndFile()
         {
+            Console.WriteLine(".");
             if (directory != null)
             {
                 textWriter.Close();

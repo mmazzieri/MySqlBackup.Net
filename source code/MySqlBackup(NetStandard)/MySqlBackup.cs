@@ -1150,10 +1150,17 @@ namespace MySql.Data.MySqlClient
 
         public void ImportFromDirectory(string path)
         {
-            foreach(var file in Directory.GetFiles(path, "*.sql"))
+            var builder = new StringBuilder();
+            foreach (var file in Directory.GetFiles(path, "*.sql"))
             {
-                ImportFromFile(file);
+                var fi = new FileInfo(path);
+                using (TextReader tr = new StreamReader(path))
+                {
+                    builder.Append(tr.ReadToEnd());
+                }
             }
+
+            ImportFromString(builder.ToString());
         }
 
         public void ImportFromTextReader(TextReader tr)

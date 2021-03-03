@@ -2,13 +2,7 @@
 using System.Timers;
 using System.Collections.Generic;
 using System.Text;
-using MySql.Data.MySqlClient;
-using System.ComponentModel;
 using System.IO;
-using System.IO.Compression;
-using System.Globalization;
-using System.Security.Cryptography;
-using System.Reflection;
 
 namespace MySql.Data.MySqlClient
 {
@@ -28,7 +22,7 @@ namespace MySql.Data.MySqlClient
             Error
         }
 
-        public const string Version = "2.3.3";
+        public const string Version = "2.4-mm";
 
         MySqlDatabase _database = new MySqlDatabase();
         MySqlServer _server = new MySqlServer();
@@ -52,6 +46,7 @@ namespace MySql.Data.MySqlClient
         DateTime timeStart;
         DateTime timeEnd;
         ProcessType currentProcess;
+        string directory;
 
         //string sha512HashedPassword = "";
         ProcessEndType processCompletionType;
@@ -172,6 +167,13 @@ namespace MySql.Data.MySqlClient
             }
         }
 
+        public void ExportToFolder(string path)
+        {
+            directory = path;
+            Directory.CreateDirectory(path);
+            ExportStart();
+        }
+
         public void ExportToTextWriter(TextWriter tw)
         {
             textWriter = tw;
@@ -234,7 +236,10 @@ namespace MySql.Data.MySqlClient
                         default: break;
                     }
 
-                    textWriter.Flush();
+                    if (directory == null)
+                    {
+                        textWriter.Flush();
+                    }
 
                     stage = stage + 1;
                 }
@@ -294,6 +299,7 @@ namespace MySql.Data.MySqlClient
             {
                 _totalRowsInAllTables = _totalRowsInAllTables + _database.Tables[kv.Key].TotalRows;
             }
+
             _currentRowIndexInCurrentTable = 0;
             _currentRowIndexInAllTable = 0;
             _totalTables = 0;
@@ -302,6 +308,8 @@ namespace MySql.Data.MySqlClient
 
         void Export_BasicInfo()
         {
+            StartFile(_database.Name);
+
             Export_WriteComment(string.Format("MySqlBackup.NET {0}", MySqlBackup.Version));
 
             if (ExportInfo.RecordDumpTime)
@@ -347,6 +355,8 @@ namespace MySql.Data.MySqlClient
                 textWriter.WriteLine();
                 textWriter.WriteLine();
             }
+
+            EndFile();
         }
 
         void Export_TableRows()
@@ -378,11 +388,15 @@ namespace MySql.Data.MySqlClient
                     _currentTableIndex = _currentTableIndex + 1;
                     _totalRowsInCurrentTable = _database.Tables[tableName].TotalRows;
 
+                    StartFile(tableName);
+
                     if (ExportInfo.ExportTableStructure)
                         Export_TableStructure(tableName);
 
                     if (ExportInfo.ExportRows)
                         Export_Rows(tableName, selectSQL);
+
+                    EndFile();
                 }
             }
         }
@@ -871,6 +885,7 @@ namespace MySql.Data.MySqlClient
             if (!ExportInfo.ExportProcedures || _database.Procedures.Count == 0)
                 return;
 
+            StartFile("procedures");
             Export_WriteComment("");
             Export_WriteComment("Dumping procedures");
             Export_WriteComment("");
@@ -896,7 +911,9 @@ namespace MySql.Data.MySqlClient
                 Export_WriteLine("DELIMITER ;");
                 textWriter.WriteLine();
             }
+
             textWriter.Flush();
+            EndFile();
         }
 
         void Export_Functions()
@@ -904,6 +921,7 @@ namespace MySql.Data.MySqlClient
             if (!ExportInfo.ExportFunctions || _database.Functions.Count == 0)
                 return;
 
+            StartFile("functions");
             Export_WriteComment("");
             Export_WriteComment("Dumping functions");
             Export_WriteComment("");
@@ -931,6 +949,7 @@ namespace MySql.Data.MySqlClient
             }
 
             textWriter.Flush();
+            EndFile();
         }
 
         void Export_Views()
@@ -947,6 +966,7 @@ namespace MySql.Data.MySqlClient
 
             var lst = Export_ReArrangeDependencies(dicView_Create, null, "`");
 
+            StartFile("views");
             Export_WriteComment("");
             Export_WriteComment("Dumping views");
             Export_WriteComment("");
@@ -976,6 +996,7 @@ namespace MySql.Data.MySqlClient
 
             textWriter.WriteLine();
             textWriter.Flush();
+            EndFile();
         }
 
         void Export_Events()
@@ -983,6 +1004,7 @@ namespace MySql.Data.MySqlClient
             if (!ExportInfo.ExportEvents || _database.Events.Count == 0)
                 return;
 
+            StartFile("events");
             Export_WriteComment("");
             Export_WriteComment("Dumping events");
             Export_WriteComment("");
@@ -1010,6 +1032,7 @@ namespace MySql.Data.MySqlClient
             }
 
             textWriter.Flush();
+            EndFile();
         }
 
         void Export_Triggers()
@@ -1017,6 +1040,7 @@ namespace MySql.Data.MySqlClient
             if (!ExportInfo.ExportTriggers || _database.Triggers.Count == 0)
                 return;
 
+            StartFile("triggers");
             Export_WriteComment("");
             Export_WriteComment("Dumping triggers");
             Export_WriteComment("");
@@ -1044,10 +1068,12 @@ namespace MySql.Data.MySqlClient
             }
 
             textWriter.Flush();
+            EndFile();
         }
 
         void Export_DocumentFooter()
         {
+            StartFile("footer");
             textWriter.WriteLine();
 
             List<string> lstFooters = ExportInfo.GetDocumentFooters();
@@ -1072,6 +1098,7 @@ namespace MySql.Data.MySqlClient
             }
 
             textWriter.Flush();
+            EndFile();
         }
 
         void Export_WriteComment(string text)
@@ -1118,6 +1145,14 @@ namespace MySql.Data.MySqlClient
             using (TextReader tr = new StreamReader(filePath))
             {
                 ImportFromTextReaderStream(tr, fi);
+            }
+        }
+
+        public void ImportFromDirectory(string path)
+        {
+            foreach(var file in Directory.GetFiles(path, "*.sql"))
+            {
+                ImportFromFile(file);
             }
         }
 
@@ -1675,6 +1710,22 @@ namespace MySql.Data.MySqlClient
         void timerReport_Elapsed(object sender, ElapsedEventArgs e)
         {
             ReportProgress();
+        }
+
+        private void StartFile(string name)
+        {
+            if (directory != null)
+            {
+                textWriter = new StreamWriter(Path.Combine(directory, name + ".sql"), false, textEncoding);
+            }
+        }
+
+        private void EndFile()
+        {
+            if (directory != null)
+            {
+                textWriter.Close();
+            }
         }
 
         void ReportProgress()

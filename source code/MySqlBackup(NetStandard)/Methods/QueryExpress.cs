@@ -397,6 +397,7 @@ namespace MySql.Data.MySqlClient
             {
                 throw new Exception("Unhandled data type. Current processing data type: " + ob.GetType().ToString() + ". Please report this bug with this message to the development team.");
             }
+
             return sb.ToString();
         }
 

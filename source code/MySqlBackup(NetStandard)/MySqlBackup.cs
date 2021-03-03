@@ -308,7 +308,7 @@ namespace MySql.Data.MySqlClient
 
         void Export_BasicInfo()
         {
-            StartFile(_database.Name);
+            StartFile("AA" + _database.Name);
 
             Export_WriteComment(string.Format("MySqlBackup.NET {0}", MySqlBackup.Version));
 
@@ -885,7 +885,7 @@ namespace MySql.Data.MySqlClient
             if (!ExportInfo.ExportProcedures || _database.Procedures.Count == 0)
                 return;
 
-            StartFile("procedures");
+            StartFile("ZZ1procedures");
             Export_WriteComment("");
             Export_WriteComment("Dumping procedures");
             Export_WriteComment("");
@@ -921,7 +921,7 @@ namespace MySql.Data.MySqlClient
             if (!ExportInfo.ExportFunctions || _database.Functions.Count == 0)
                 return;
 
-            StartFile("functions");
+            StartFile("ZZ2functions");
             Export_WriteComment("");
             Export_WriteComment("Dumping functions");
             Export_WriteComment("");
@@ -966,7 +966,7 @@ namespace MySql.Data.MySqlClient
 
             var lst = Export_ReArrangeDependencies(dicView_Create, null, "`");
 
-            StartFile("views");
+            StartFile("ZZ3views");
             Export_WriteComment("");
             Export_WriteComment("Dumping views");
             Export_WriteComment("");
@@ -1004,7 +1004,7 @@ namespace MySql.Data.MySqlClient
             if (!ExportInfo.ExportEvents || _database.Events.Count == 0)
                 return;
 
-            StartFile("events");
+            StartFile("ZZ4events");
             Export_WriteComment("");
             Export_WriteComment("Dumping events");
             Export_WriteComment("");
@@ -1040,7 +1040,7 @@ namespace MySql.Data.MySqlClient
             if (!ExportInfo.ExportTriggers || _database.Triggers.Count == 0)
                 return;
 
-            StartFile("triggers");
+            StartFile("ZZ5triggers");
             Export_WriteComment("");
             Export_WriteComment("Dumping triggers");
             Export_WriteComment("");
@@ -1073,7 +1073,7 @@ namespace MySql.Data.MySqlClient
 
         void Export_DocumentFooter()
         {
-            StartFile("footer");
+            StartFile("ZZ6footer");
             textWriter.WriteLine();
 
             List<string> lstFooters = ExportInfo.GetDocumentFooters();
@@ -1153,13 +1153,13 @@ namespace MySql.Data.MySqlClient
             var builder = new StringBuilder();
             foreach (var file in Directory.GetFiles(path, "*.sql"))
             {
-                var fi = new FileInfo(path);
-                using (TextReader tr = new StreamReader(path))
+                using (TextReader tr = new StreamReader(file))
                 {
                     builder.Append(tr.ReadToEnd());
                 }
             }
 
+            File.WriteAllText(path + ".sql", builder.ToString());
             ImportFromString(builder.ToString());
         }
 

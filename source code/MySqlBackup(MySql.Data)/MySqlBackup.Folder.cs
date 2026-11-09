@@ -8,19 +8,18 @@ namespace MySql.Data.MySqlClient
 {
     public partial class MySqlBackup
     {
-        // File name prefixes are chosen so that lexicographic ordering of
-        // *.sql files in the folder matches the required execution order
-        // for restore (header → tables → routines → views → triggers → footer).
-        const string FolderHeaderBasicInfoFile = "00_basic_info.sql";
-        const string FolderHeaderCreateDbFile = "01_create_database.sql";
-        const string FolderHeaderDocumentFile = "02_document_header.sql";
-        const string FolderTableFilePrefix = "10_table_";
-        const string FolderFunctionsFile = "20_functions.sql";
-        const string FolderProceduresFile = "21_procedures.sql";
-        const string FolderEventsFile = "22_events.sql";
-        const string FolderViewsFile = "23_views.sql";
-        const string FolderTriggersFile = "24_triggers.sql";
-        const string FolderFooterFile = "99_document_footer.sql";
+        // File name prefixes are chosen so that case-insensitive lexicographic
+        // ordering of *.sql files matches the required execution order for restore
+        // (AA<db> header → <table>.sql tables → ZZ1..ZZ6 routines/views/triggers/footer).
+        // ImportFromDirectory sorts using OrdinalIgnoreCase so that uppercase AA/ZZ
+        // sit before/after the lowercase table file names.
+        const string FolderHeaderFilePattern = "AA{0}.sql";
+        const string FolderProceduresFile = "ZZ1procedures.sql";
+        const string FolderFunctionsFile = "ZZ2functions.sql";
+        const string FolderViewsFile = "ZZ3views.sql";
+        const string FolderEventsFile = "ZZ4events.sql";
+        const string FolderTriggersFile = "ZZ5triggers.sql";
+        const string FolderFooterFile = "ZZ6footer.sql";
 
         /// <summary>
         /// Exports the database to a folder, splitting the dump into one .sql file
@@ -38,44 +37,44 @@ namespace MySql.Data.MySqlClient
 
                 Export_InitializeVariables();
 
+                string headerFileName = string.Format(FolderHeaderFilePattern, ExportFolder_SanitizeFileName(_database.Name));
+
                 int stage = 1;
-                int tableIndex = 0;
                 Dictionary<string, string> tablesToExport = null;
 
-                while (stage < 11)
+                while (stage < 9)
                 {
                     if (stopProcess) break;
 
                     switch (stage)
                     {
                         case 1:
-                            ExportFolder_WriteSection(Path.Combine(folderPath, FolderHeaderBasicInfoFile), Export_BasicInfo);
+                            ExportFolder_WriteSection(Path.Combine(folderPath, headerFileName), () =>
+                            {
+                                Export_BasicInfo();
+                                Export_CreateDatabase();
+                                Export_DocumentHeader();
+                            });
                             break;
                         case 2:
-                            ExportFolder_WriteSection(Path.Combine(folderPath, FolderHeaderCreateDbFile), Export_CreateDatabase);
+                            tablesToExport = ExportFolder_TableRows(folderPath);
                             break;
                         case 3:
-                            ExportFolder_WriteSection(Path.Combine(folderPath, FolderHeaderDocumentFile), Export_DocumentHeader);
-                            break;
-                        case 4:
-                            tablesToExport = ExportFolder_TableRows(folderPath, ref tableIndex);
-                            break;
-                        case 5:
-                            ExportFolder_WriteSection(Path.Combine(folderPath, FolderFunctionsFile), Export_Functions);
-                            break;
-                        case 6:
                             ExportFolder_WriteSection(Path.Combine(folderPath, FolderProceduresFile), Export_Procedures);
                             break;
-                        case 7:
-                            ExportFolder_WriteSection(Path.Combine(folderPath, FolderEventsFile), Export_Events);
+                        case 4:
+                            ExportFolder_WriteSection(Path.Combine(folderPath, FolderFunctionsFile), Export_Functions);
                             break;
-                        case 8:
+                        case 5:
                             ExportFolder_WriteSection(Path.Combine(folderPath, FolderViewsFile), Export_Views);
                             break;
-                        case 9:
+                        case 6:
+                            ExportFolder_WriteSection(Path.Combine(folderPath, FolderEventsFile), Export_Events);
+                            break;
+                        case 7:
                             ExportFolder_WriteSection(Path.Combine(folderPath, FolderTriggersFile), Export_Triggers);
                             break;
-                        case 10:
+                        case 8:
                             ExportFolder_WriteSection(Path.Combine(folderPath, FolderFooterFile), Export_DocumentFooter);
                             break;
                     }
@@ -118,7 +117,7 @@ namespace MySql.Data.MySqlClient
             textWriter = null;
         }
 
-        Dictionary<string, string> ExportFolder_TableRows(string folderPath, ref int tableIndex)
+        Dictionary<string, string> ExportFolder_TableRows(string folderPath)
         {
             if (!ExportInfo.ExportTableStructure && !ExportInfo.ExportRows)
                 return null;
@@ -128,6 +127,8 @@ namespace MySql.Data.MySqlClient
 
             if (ExportProgressChanged != null)
                 timerReport.Start();
+
+            int tableIndex = 0;
 
             try
             {
@@ -147,11 +148,7 @@ namespace MySql.Data.MySqlClient
                     _currentTableIndex = tableIndex;
                     _totalRowsInCurrentTable = _database.Tables[tableName].TotalRows;
 
-                    string fileName = string.Format(
-                        "{0}{1:D4}_{2}.sql",
-                        FolderTableFilePrefix,
-                        tableIndex,
-                        ExportFolder_SanitizeFileName(tableName));
+                    string fileName = ExportFolder_SanitizeFileName(tableName) + ".sql";
                     string filePath = Path.Combine(folderPath, fileName);
 
                     using (var fs = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None, GetOptimalStreamBufferSize()))
@@ -204,12 +201,17 @@ namespace MySql.Data.MySqlClient
                 throw new DirectoryNotFoundException($"Folder not found: {folderPath}");
 
             string[] files = Directory.GetFiles(folderPath, "*.sql");
-            Array.Sort(files, StringComparer.Ordinal);
+            Array.Sort(files, StringComparer.OrdinalIgnoreCase);
 
+            // Note: do NOT check `stopProcess` between files. ImportFromFile's
+            // finally calls ReportEndProcess → StopAllProcess, which sets the
+            // flag to true on every successful file. Breaking on it here would
+            // make the loop exit after the very first file. ImportFromFile
+            // resets stopProcess to false at the start via Import_InitializeVariables,
+            // so the next iteration always starts clean.
             foreach (string file in files)
             {
                 ImportFromFile(file);
-                if (stopProcess) break;
             }
         }
     }

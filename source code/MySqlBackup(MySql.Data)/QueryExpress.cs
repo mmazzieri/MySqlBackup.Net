@@ -106,8 +106,11 @@ namespace MySql.Data.MySqlClient
                         builder.Append("\\\"");
                         break;
                     case '\'': // Single quote character
-                               // mysqldump uses \' instead of ''
-                        builder.Append("\\'");
+                               // Use SQL standard '' (doubled apostrophe) instead of \' to match
+                               // the historical dump format produced by MySqlBackup.NET 2.3.6.2.
+                               // Both forms are accepted by MySQL; '' keeps byte-level parity
+                               // with the existing per-table .sql files in this fork.
+                        builder.Append("''");
                         break;
 
                     // These characters are not defined in MySQL

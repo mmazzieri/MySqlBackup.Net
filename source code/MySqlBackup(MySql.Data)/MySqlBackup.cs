@@ -1788,6 +1788,13 @@ namespace MySql.Data.MySqlClient
 
             Export_RowsData(tableName, selectSQL);
 
+            // For empty tables Export_RowsData writes nothing. The historical dump
+            // format (MySqlBackup.NET 2.3.6.2) emitted a single blank line between
+            // DISABLE KEYS and ENABLE KEYS in that case. Restore that here so byte-
+            // level diffs against the legacy dumps stay clean.
+            if (_currentRowIndexInCurrentTable == 0L)
+                textWriter.WriteLine();
+
             if (ExportInfo.EnableLockTablesWrite)
                 Export_WriteLine($"UNLOCK TABLES;");
 
@@ -2820,12 +2827,15 @@ namespace MySql.Data.MySqlClient
             }
             catch (Exception ex)
             {
-                if (!stopProcess)
-                {
+                // Always propagate the SQL error. The previous code only re-threw
+                // when !stopProcess, but the inner catch sets stopProcess=true via
+                // StopAllProcess() right before re-throwing here. That meant SQL
+                // failures (e.g. CREATE PROCEDURE under DELIMITER) were silently
+                // swallowed and the caller saw a successful import.
+                if (_lastError == null)
                     _lastError = ex;
-                    StopAllProcess();
-                    throw;
-                }
+                StopAllProcess();
+                throw;
             }
             finally
             {
